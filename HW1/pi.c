@@ -41,12 +41,12 @@ int main(int argc, char **argv)
 	num_thread = num_cpu;
 	toss_per_thread = num_toss / num_thread;
 	pthread_t tid[num_thread];
-    for(int i = 0; i < num_thread; i++){
-        int create_fail = pthread_create(&tid[i], NULL, dart_toss,(void*)NULL);
-    }
-    for (int i = 0; i < num_thread; i++) {
-        pthread_join(tid[i], NULL);
-    }
+	for(int i = 0; i < num_thread; i++){
+		pthread_create(&tid[i], NULL, dart_toss,(void*)NULL);
+	}
+	for (int i = 0; i < num_thread; i++) {
+		pthread_join(tid[i], NULL);
+	}
 	pthread_mutex_destroy(&mutex);
 	pi_estimate = 4 * total_num_hits/((double)num_toss);
 	printf("%f\n", pi_estimate);
