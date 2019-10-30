@@ -13,8 +13,8 @@ void *dart_toss ()
 	BIGINT num_hits = 0;
 	unsigned int state = rand();
 	for (BIGINT toss = 0; toss < toss_per_thread; toss++){
-		double x = rand_r(&state) / ((double)RAND_MAX + 1) * 2.0 - 1.0;
-		double y = rand_r(&state) / ((double)RAND_MAX + 1) * 2.0 - 1.0;
+		double x = rand_r(&state) / ((double)RAND_MAX + 1);
+		double y = rand_r(&state) / ((double)RAND_MAX + 1);
 		if ( x * x + y * y <= 1){
 			num_hits++;
 		}
@@ -43,10 +43,6 @@ int main(int argc, char **argv)
 	pthread_t tid[num_thread];
     for(int i = 0; i < num_thread; i++){
         int create_fail = pthread_create(&tid[i], NULL, dart_toss,(void*)NULL);
-        if (create_fail){
-            printf("pthread_create() error\n");
-            exit(-1);
-        }
     }
     for (int i = 0; i < num_thread; i++) {
         pthread_join(tid[i], NULL);
