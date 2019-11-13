@@ -87,7 +87,7 @@ static void vecset(int n, double v[], int iv[], int *nzv, int i, double val);
 int main(int argc, char *argv[])
 {	
 	int i, j, k, it;
-	
+
 	double zeta;
 	double rnorm;
 	double norm_temp1, norm_temp2;
@@ -238,6 +238,7 @@ int main(int argc, char *argv[])
 		//---------------------------------------------------------------------
 		norm_temp1 = 0.0;
 		norm_temp2 = 0.0;
+		#pragma omp parallel reduction(+:norm_temp1, norm_temp2)
 		for (j = 0; j < lastcol - firstcol + 1; j++) {
 			norm_temp1 = norm_temp1 + x[j]*z[j];
 			norm_temp2 = norm_temp2 + z[j]*z[j];
@@ -303,13 +304,12 @@ static void conj_grad(int colidx[],
 		double r[],
 		double *rnorm)
 {
-	int j, k;
+	int i, j, k;
 	int cgit, cgitmax = 25;
 	double d, sum, rho, rho0, alpha, beta;
 	int num_col = lastcol - firstcol + 1;
 
 	rho = 0.0;
-
 	//---------------------------------------------------------------------
 	// Initialize the CG algorithm:
 	//---------------------------------------------------------------------
@@ -351,7 +351,7 @@ static void conj_grad(int colidx[],
 		for (j = 0; j < num_col; j++) {
 			sum = 0.0;
 			for (k = rowstr[j]; k < rowstr[j+1]; k++) {
-				sum = sum + a[k]*p[colidx[k]];
+			sum = sum + a[k]*p[colidx[k]];
 			}
 			q[j] = sum;
 		}
