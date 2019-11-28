@@ -8,12 +8,12 @@ int main(int argc, char **argv) {
   int iteration = atoi(argv[2]);                // Iteration
   srand(atoi(argv[3]));                         // Seed
   float d = (float) random() / RAND_MAX * 0.2;  // Diffusivity
-  int *temp = malloc(L*W*sizeof(int));          // Current temperature
-  int *next = malloc(L*W*sizeof(int));          // Next time step
+  int *temp = malloc(L * W * sizeof(int));          // Current temperature
+  int *next = malloc(L * W * sizeof(int));          // Next time step
 
   for (int i = 0; i < L; i++) {
     for (int j = 0; j < W; j++) {
-      temp[i * W + j] = random()>>3;
+      temp[i * W + j] = random() >> 3;
     }
   }
   int count = 0, balance = 0;
