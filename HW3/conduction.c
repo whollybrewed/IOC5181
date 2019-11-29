@@ -22,13 +22,13 @@ int main(int argc, char **argv)
 	int local_start = rank * local_L;
 	int local_end = rank * local_L + local_L - 1;
 	int global_min, global_balance = 1;
-	
+
 	for (int i = 0; i < L; i++) {
 		for (int j = 0; j < W; j++) {
 			temp[i * W + j] = random() >> 3;
 		}
 	}
-	
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	int count = 0, balance = 0;
 	while (iteration--) {     // Compute with up, left, right, down points
@@ -40,11 +40,11 @@ int main(int argc, char **argv)
 						 &temp[local_end * W + W], W, MPI_INT, 1, TAG,  
 						 MPI_COMM_WORLD, &status);
 		}
-		
+
 		else if (rank == num_prc - 1){
 			MPI_Sendrecv(&temp[local_start * W], W, MPI_INT, num_prc - 2, TAG,
 						 &temp[local_start * W - W], W, MPI_INT, num_prc - 2, TAG,  
-					 	 MPI_COMM_WORLD, &status);
+						 MPI_COMM_WORLD, &status);
 		}
 		else{
 			MPI_Sendrecv(&temp[local_end * W], W, MPI_INT, rank + 1, TAG,
@@ -54,8 +54,6 @@ int main(int argc, char **argv)
 						 &temp[local_start * W - W], W, MPI_INT, rank - 1, TAG,  
 						 MPI_COMM_WORLD, &status);
 		}
-	
-				
 		MPI_Barrier(MPI_COMM_WORLD);
 		for (int i = local_start; i < local_end + 1; i++) {
 			for (int j = 0; j < W; j++) {
@@ -73,7 +71,7 @@ int main(int argc, char **argv)
 			}
 		}
 		MPI_Barrier(MPI_COMM_WORLD);
-		MPI_Allreduce(&balance, &global_balance, 1, MPI_INT, MPI_PROD, MPI_COMM_WORLD);		
+		MPI_Allreduce(&balance, &global_balance, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);		
 		if (global_balance) {
 			break;
 		}
