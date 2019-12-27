@@ -106,21 +106,6 @@ int writebmp(const char *filename, Image *img)
     fout.close();
 }
 
-cl_program build_kernel(cl_context context, const char* filename)
-{
-    std::ifstream input(filename, std::ios_base::binary);
-    input.seekg(0, std::ios_base::end);
-    size_t length = input.tellg();
-    input.seekg(0, std::ios_base::beg);
-    std::vector<char> data(length + 1);
-    input.read(&data[0], length);
-    data[length] = 0;
-    const char* source = &data[0];
-    cl_program program = clCreateProgramWithSource(context, 1, &source, 0, 0);
-    clBuildProgram(program, 0, 0, 0, 0, 0);
-    return program;
-}
-
 int main(int argc, char *argv[])
 {
     cl_int err;
@@ -143,15 +128,9 @@ int main(int argc, char *argv[])
 	in.read(&data[0], length);
 	data[length] = 0;
 	const char *source = &data[0];
-	
+    
 	cl_program program = clCreateProgramWithSource(context, 1, (const char **)&source, 0, 0);
-
-	if (clBuildProgram(program, 1, &device, NULL, NULL, NULL) != CL_SUCCESS) {
-		std::cerr << "Can't load or build program\n";
-		clReleaseCommandQueue(queue);
-		clReleaseContext(context);
-		return 0;
-	}
+    clBuildProgram(program, 1, &device, NULL, NULL, NULL);
 
     char *filename;
     if (argc >= 2){
@@ -161,56 +140,56 @@ int main(int argc, char *argv[])
 
             Image *img = readbmp(filename);
             std::cout << img->weight << ":" << img->height << "\n";
-	        int input_size = img->size;
-	        unsigned char Rin[input_size];
-	        unsigned char Gin[input_size];
-	        unsigned char Bin[input_size];
 
-	        for(int i=0; i<input_size; i++){
-		        Rin[i] = img->data[i].R;
-		        Gin[i] = img->data[i].G;
-		        Bin[i] = img->data[i].B;
-	        }
+	        int input_size = img->size;
+            size_t in_byte = input_size * sizeof(unsigned char);
+	        unsigned char img_r[input_size];
+	        unsigned char img_g[input_size];
+	        unsigned char img_b[input_size];
             unsigned int R[256];
             unsigned int G[256];
             unsigned int B[256];
-	        size_t in_byte = input_size * sizeof(unsigned char);
+
+	        for(int i=0; i<input_size; i++){
+		        img_r[i] = img->data[i].R;
+		        img_g[i] = img->data[i].G;
+		        img_b[i] = img->data[i].B;
+	        }
 
             cl_kernel histogram = clCreateKernel(program, "histogram", 0);
 
-	        cl_mem cl_rin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Rin[0], NULL);  
-	        cl_mem cl_gin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Gin[0], NULL);  
-	        cl_mem cl_bin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Bin[0], NULL);
+	        cl_mem d_img_r = 
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &img_r[0], NULL);  
+	        cl_mem d_img_g = 
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &img_g[0], NULL);  
+	        cl_mem d_img_b = 
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &img_b[0], NULL);
 
-	        cl_mem cl_r = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
-	        cl_mem cl_g = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
-	        cl_mem cl_b = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
+	        cl_mem d_r = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
+	        cl_mem d_g = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
+	        cl_mem d_b = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
 
-	        clSetKernelArg(histogram, 0, sizeof(cl_mem), &cl_rin);
-	        clSetKernelArg(histogram, 1, sizeof(cl_mem), &cl_gin);
-            clSetKernelArg(histogram, 2, sizeof(cl_mem), &cl_bin);
-            clSetKernelArg(histogram, 3, sizeof(cl_mem), &cl_r);
-            clSetKernelArg(histogram, 4, sizeof(cl_mem), &cl_g);
-            clSetKernelArg(histogram, 5, sizeof(cl_mem), &cl_b);
+	        clSetKernelArg(histogram, 0, sizeof(cl_mem), &d_img_r);
+	        clSetKernelArg(histogram, 1, sizeof(cl_mem), &d_img_g);
+            clSetKernelArg(histogram, 2, sizeof(cl_mem), &d_img_b);
+            clSetKernelArg(histogram, 3, sizeof(cl_mem), &d_r);
+            clSetKernelArg(histogram, 4, sizeof(cl_mem), &d_g);
+            clSetKernelArg(histogram, 5, sizeof(cl_mem), &d_b);
             clSetKernelArg(histogram, 6, sizeof(cl_int), (void*)&input_size);
-            size_t global_work = 256;
-
+            
+            size_t global_work = input_size;
             clEnqueueNDRangeKernel(queue, histogram, 1, 0, &global_work, 0, 0, 0, 0);
-            clEnqueueReadBuffer(queue, cl_r, CL_TRUE, 0, sizeof(unsigned int) * 256, &R[0], 0, 0, 0);
-            clEnqueueReadBuffer(queue, cl_g, CL_TRUE, 0, sizeof(unsigned int) * 256, &G[0], 0, 0, 0);
-            clEnqueueReadBuffer(queue, cl_b, CL_TRUE, 0, sizeof(unsigned int) * 256, &B[0], 0, 0, 0);
+            clEnqueueReadBuffer(queue, d_r, CL_TRUE, 0, sizeof(unsigned int) * 256, &R[0], 0, 0, 0);
+            clEnqueueReadBuffer(queue, d_g, CL_TRUE, 0, sizeof(unsigned int) * 256, &G[0], 0, 0, 0);
+            clEnqueueReadBuffer(queue, d_b, CL_TRUE, 0, sizeof(unsigned int) * 256, &B[0], 0, 0, 0);
 
-	        //histogram(img,R,G,B);
     	    clReleaseKernel(histogram);
-    	    clReleaseMemObject(cl_rin);
-    	    clReleaseMemObject(cl_gin);
-    	    clReleaseMemObject(cl_bin);
-    	    clReleaseMemObject(cl_r);
-    	    clReleaseMemObject(cl_g);
-    	    clReleaseMemObject(cl_b);
+    	    clReleaseMemObject(d_img_r);
+    	    clReleaseMemObject(d_img_g);
+    	    clReleaseMemObject(d_img_b);
+    	    clReleaseMemObject(d_r);
+    	    clReleaseMemObject(d_g);
+    	    clReleaseMemObject(d_b);
 
             int max = 0;
             for(int i=0;i<256;i++){
