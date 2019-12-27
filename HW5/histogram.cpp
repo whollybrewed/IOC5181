@@ -106,64 +106,67 @@ int writebmp(const char *filename, Image *img)
     fout.close();
 }
 
-cl_program load_program(cl_context context, const char* filename)
+cl_program build_kernel(cl_context context, const char* filename)
 {
     std::ifstream input(filename, std::ios_base::binary);
-
-    // get length
     input.seekg(0, std::ios_base::end);
     size_t length = input.tellg();
     input.seekg(0, std::ios_base::beg);
-
-    // read data
     std::vector<char> data(length + 1);
     input.read(&data[0], length);
     data[length] = 0;
-
-    // build
     const char* source = &data[0];
     cl_program program = clCreateProgramWithSource(context, 1, &source, 0, 0);
     clBuildProgram(program, 0, 0, 0, 0, 0);
     return program;
 }
 
-
 int main(int argc, char *argv[])
 {
+    cl_int err;
+	cl_uint num_platform;
+	cl_platform_id platform;
+    cl_device_id device;
+	cl_uint num_dev;
+
+	err = clGetPlatformIDs(1, &platform, &num_platform);
+	err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, &num_dev);
+	cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+	cl_command_queue queue = clCreateCommandQueue(context, device, 0, 0);
+
+	std::ifstream in("histogram.cl", std::ios_base::binary);
+	in.seekg(0, std::ios_base::end);
+	size_t length = in.tellg();
+	in.seekg(0, std::ios_base::beg);
+
+	char data[length + 1];
+	in.read(&data[0], length);
+	data[length] = 0;
+	const char *source = &data[0];
+	
+	cl_program program = clCreateProgramWithSource(context, 1, (const char **)&source, 0, 0);
+
+	if (clBuildProgram(program, 1, &device, NULL, NULL, NULL) != CL_SUCCESS) {
+		std::cerr << "Can't load or build program\n";
+		clReleaseCommandQueue(queue);
+		clReleaseContext(context);
+		return 0;
+	}
+
     char *filename;
     if (argc >= 2){
         int many_img = argc - 1;
         for (int i = 0; i < many_img; i++){
             filename = argv[i + 1];
-            cl_uint num;
-            clGetPlatformIDs(0, 0, &num);
 
-	        std::vector<cl_platform_id> platforms(num);
-	        clGetPlatformIDs(num, &platforms[0], &num);
-
-	        cl_context_properties prop[] = 
-                {CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[0]), 0};
-	        cl_context context = clCreateContextFromType(prop, CL_DEVICE_TYPE_GPU, NULL, NULL, NULL);
-
-	        size_t cb;
-	        clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &cb);
-	        std::vector<cl_device_id> devices(cb / sizeof(cl_device_id));
-	        clGetContextInfo(context, CL_CONTEXT_DEVICES, cb, &devices[0], 0);
-
-	        clGetDeviceInfo(devices[0], CL_DEVICE_NAME, 0, NULL, &cb);
-	        std::string devname;
-	        devname.resize(cb);
-	        clGetDeviceInfo(devices[0], CL_DEVICE_NAME, cb, &devname[0], 0);
-
-	        cl_command_queue queue = clCreateCommandQueue(context, devices[0], 0, 0);
             Image *img = readbmp(filename);
-
             std::cout << img->weight << ":" << img->height << "\n";
-	        int DATA_SIZE = img->weight * img->height;
-	        unsigned char Rin[DATA_SIZE];
-	        unsigned char Gin[DATA_SIZE];
-	        unsigned char Bin[DATA_SIZE];
-	        for(int i=0; i<DATA_SIZE; i++){
+	        int input_size = img->size;
+	        unsigned char Rin[input_size];
+	        unsigned char Gin[input_size];
+	        unsigned char Bin[input_size];
+
+	        for(int i=0; i<input_size; i++){
 		        Rin[i] = img->data[i].R;
 		        Gin[i] = img->data[i].G;
 		        Bin[i] = img->data[i].B;
@@ -171,21 +174,20 @@ int main(int argc, char *argv[])
             unsigned int R[256];
             unsigned int G[256];
             unsigned int B[256];
-	        size_t size = DATA_SIZE*sizeof(unsigned char);
+	        size_t in_byte = input_size * sizeof(unsigned char);
+
+            cl_kernel histogram = clCreateKernel(program, "histogram", 0);
+
 	        cl_mem cl_rin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size, &Rin[0], NULL);  
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Rin[0], NULL);  
 	        cl_mem cl_gin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size, &Gin[0], NULL);  
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Gin[0], NULL);  
 	        cl_mem cl_bin = 
-                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size, &Bin[0], NULL);
+                clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, in_byte, &Bin[0], NULL);
 
 	        cl_mem cl_r = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
 	        cl_mem cl_g = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
 	        cl_mem cl_b = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(unsigned int) * 256, NULL, NULL);
-
-	        cl_program program = load_program(context, "histogram.cl");
-
-	        cl_kernel histogram = clCreateKernel(program, "histogram", 0);
 
 	        clSetKernelArg(histogram, 0, sizeof(cl_mem), &cl_rin);
 	        clSetKernelArg(histogram, 1, sizeof(cl_mem), &cl_gin);
@@ -193,25 +195,22 @@ int main(int argc, char *argv[])
             clSetKernelArg(histogram, 3, sizeof(cl_mem), &cl_r);
             clSetKernelArg(histogram, 4, sizeof(cl_mem), &cl_g);
             clSetKernelArg(histogram, 5, sizeof(cl_mem), &cl_b);
-            clSetKernelArg(histogram, 6, sizeof(cl_int), (void*)&DATA_SIZE);
-            size_t work_size = 256;
+            clSetKernelArg(histogram, 6, sizeof(cl_int), (void*)&input_size);
+            size_t global_work = 256;
 
-            clEnqueueNDRangeKernel(queue, histogram, 1, 0, &work_size, 0, 0, 0, 0);
+            clEnqueueNDRangeKernel(queue, histogram, 1, 0, &global_work, 0, 0, 0, 0);
             clEnqueueReadBuffer(queue, cl_r, CL_TRUE, 0, sizeof(unsigned int) * 256, &R[0], 0, 0, 0);
             clEnqueueReadBuffer(queue, cl_g, CL_TRUE, 0, sizeof(unsigned int) * 256, &G[0], 0, 0, 0);
             clEnqueueReadBuffer(queue, cl_b, CL_TRUE, 0, sizeof(unsigned int) * 256, &B[0], 0, 0, 0);
 
 	        //histogram(img,R,G,B);
     	    clReleaseKernel(histogram);
-    	    clReleaseProgram(program);
     	    clReleaseMemObject(cl_rin);
     	    clReleaseMemObject(cl_gin);
     	    clReleaseMemObject(cl_bin);
     	    clReleaseMemObject(cl_r);
     	    clReleaseMemObject(cl_g);
     	    clReleaseMemObject(cl_b);
-    	    clReleaseCommandQueue(queue);
-    	    clReleaseContext(context);
 
             int max = 0;
             for(int i=0;i<256;i++){
@@ -248,6 +247,9 @@ int main(int argc, char *argv[])
     }else{
         printf("Usage: ./hist <img.bmp> [img2.bmp ...]\n");
     }
+
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+    clReleaseProgram(program);
     return 0;
 }
-
