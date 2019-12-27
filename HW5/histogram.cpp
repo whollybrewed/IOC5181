@@ -141,16 +141,15 @@ int main(int argc, char *argv[])
             Image *img = readbmp(filename);
             std::cout << img->weight << ":" << img->height << "\n";
 
-	        int input_size = img->size;
-            size_t in_byte = input_size * sizeof(unsigned char);
-	        unsigned char img_r[input_size];
-	        unsigned char img_g[input_size];
-	        unsigned char img_b[input_size];
+            size_t in_byte = img->size * sizeof(unsigned char);
+	        unsigned char img_r[img->size];
+	        unsigned char img_g[img->size];
+	        unsigned char img_b[img->size];
             unsigned int R[256];
             unsigned int G[256];
             unsigned int B[256];
 
-	        for(int i=0; i<input_size; i++){
+	        for(unsigned int i = 0; i < img->size; i++){
 		        img_r[i] = img->data[i].R;
 		        img_g[i] = img->data[i].G;
 		        img_b[i] = img->data[i].B;
@@ -175,9 +174,9 @@ int main(int argc, char *argv[])
             clSetKernelArg(histogram, 3, sizeof(cl_mem), &d_r);
             clSetKernelArg(histogram, 4, sizeof(cl_mem), &d_g);
             clSetKernelArg(histogram, 5, sizeof(cl_mem), &d_b);
-            clSetKernelArg(histogram, 6, sizeof(cl_int), (void*)&input_size);
+            clSetKernelArg(histogram, 6, sizeof(cl_int), (void*)&img->size);
             
-            size_t global_work = input_size;
+            size_t global_work = img->size;
             clEnqueueNDRangeKernel(queue, histogram, 1, 0, &global_work, 0, 0, 0, 0);
             clEnqueueReadBuffer(queue, d_r, CL_TRUE, 0, sizeof(unsigned int) * 256, &R[0], 0, 0, 0);
             clEnqueueReadBuffer(queue, d_g, CL_TRUE, 0, sizeof(unsigned int) * 256, &G[0], 0, 0, 0);
