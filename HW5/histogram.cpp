@@ -221,6 +221,9 @@ int main(int argc, char *argv[])
 
             std::string newfile = "hist_" + std::string(filename); 
             writebmp(newfile.c_str(), ret);
+			free(img_r);
+			free(img_g);
+			free(img_b);
         }
     }else{
         printf("Usage: ./hist <img.bmp> [img2.bmp ...]\n");
