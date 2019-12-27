@@ -142,9 +142,9 @@ int main(int argc, char *argv[])
             std::cout << img->weight << ":" << img->height << "\n";
 
             size_t in_byte = img->size * sizeof(unsigned char);
-	        unsigned char img_r[img->size];
-	        unsigned char img_g[img->size];
-	        unsigned char img_b[img->size];
+			unsigned char* img_r = (unsigned char*)malloc(sizeof(unsigned char) * img->size);
+            unsigned char* img_g = (unsigned char*)malloc(sizeof(unsigned char) * img->size);
+            unsigned char* img_b = (unsigned char*)malloc(sizeof(unsigned char) * img->size);
             unsigned int R[256];
             unsigned int G[256];
             unsigned int B[256];
